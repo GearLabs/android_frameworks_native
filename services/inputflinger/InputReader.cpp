@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/* Copyright (C) 2014 Freescale Semiconductor, Inc. */
 
 #define LOG_TAG "InputReader"
 
@@ -51,6 +52,8 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#include <cutils/properties.h>
 
 #include <log/log.h>
 
@@ -3525,6 +3528,19 @@ void TouchInputMapper::configureSurface(nsecs_t when, bool* outResetNeeded) {
     int32_t rawWidth = mRawPointerAxes.x.maxValue - mRawPointerAxes.x.minValue + 1;
     int32_t rawHeight = mRawPointerAxes.y.maxValue - mRawPointerAxes.y.minValue + 1;
 
+    char hwrotBuf[PROPERTY_VALUE_MAX];
+    int32_t hwrotation = DISPLAY_ORIENTATION_0;
+    if (property_get("ro.sf.hwrotation", hwrotBuf, NULL) > 0) {
+        switch (atoi(hwrotBuf)) {
+            case 90:
+                hwrotation = DISPLAY_ORIENTATION_90;
+                break;
+            case 270:
+                hwrotation = DISPLAY_ORIENTATION_270;
+                break;
+        }
+    }
+
     // Get associated display dimensions.
     DisplayViewport newViewport;
     if (mParameters.hasAssociatedDisplay) {
@@ -3550,8 +3566,16 @@ void TouchInputMapper::configureSurface(nsecs_t when, bool* outResetNeeded) {
             mDeviceMode = DEVICE_MODE_DISABLED;
             return;
         }
+        newViewport.orientation = (newViewport.orientation + hwrotation) % 4;
     } else {
+        if ((hwrotation == DISPLAY_ORIENTATION_90 ||
+                hwrotation == DISPLAY_ORIENTATION_270)) {
+            int tmp = rawWidth;
+            rawWidth = rawHeight;
+            rawHeight = tmp;
+        }
         newViewport.setNonDisplayViewport(rawWidth, rawHeight);
+        newViewport.orientation = hwrotation;
     }
     bool viewportChanged = mViewport != newViewport;
     if (viewportChanged) {
